@@ -1,0 +1,84 @@
+{
+  "name": "osint-graph",
+  "productName": "OSINT Graph",
+  "version": "1.0.0",
+  "description": "Offline tree-graph editor for OSINT investigations — Windows, macOS, Linux.",
+  "main": "electron/main.js",
+  "homepage": "https://github.com/radmorex/osint-graph",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/radmorex/osint-graph.git"
+  },
+  "author": {
+    "name": "radmorex",
+    "email": "radmorex@users.noreply.github.com"
+  },
+  "license": "MIT",
+  "keywords": ["osint", "graph", "mind-map", "investigation", "electron", "offline"],
+  "scripts": {
+    "start": "electron .",
+    "screenshots": "electron scripts/screenshots.js",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^45.5.0",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "io.github.radmorex.osintgraph",
+    "productName": "OSINT Graph",
+    "artifactName": "OSINT-Graph-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "electron/**",
+      "src/**",
+      "build/icon.png",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] },
+        { "target": "zip", "arch": ["arm64", "x64"] }
+      ],
+      "category": "public.app-category.productivity",
+      "identity": "-",
+      "hardenedRuntime": false
+    },
+    "dmg": {
+      "artifactName": "OSINT-Graph-${version}-mac-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "OSINT-Graph-${version}-Windows-Setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "OSINT-Graph-${version}-Windows-Portable.${ext}"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Office",
+      "maintainer": "radmorex <radmorex@users.noreply.github.com>",
+      "synopsis": "Offline tree-graph editor for OSINT investigations"
+    },
+    "appImage": {
+      "artifactName": "OSINT-Graph-${version}-Linux-${arch}.${ext}"
+    },
+    "deb": {
+      "artifactName": "OSINT-Graph-${version}-Linux-${arch}.${ext}"
+    },
+    "publish": null
+  }
+}

@@ -1,0 +1,1018 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Никаких сетевых запросов: страница не может ничего загрузить или отправить -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; base-uri 'none'; form-action 'none'">
+<meta name="description" content="OSINT Graph — локальный редактор графов-деревьев для OSINT-расследований">
+<title>OSINT Graph</title>
+<style>
+:root{
+  --bg:#0a0a0a; --panel:#121212; --panel2:#1a1a1a; --line:#262626; --text:#e6e6e6;
+  --muted:#8a8a8a; --dim:#5c5c5c; --accent:#7aa2ff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,"Helvetica Neue",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.45 var(--font);overflow:hidden}
+#stage{position:fixed;inset:0;width:100%;height:100%;cursor:grab;user-select:none;-webkit-user-select:none}
+#stage.panning{cursor:grabbing}
+#stage.dragging{cursor:copy}
+aside{position:fixed;top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;z-index:10;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+#side{left:16px;width:330px;max-height:calc(100% - 32px);overflow:auto}
+#insp{right:16px;width:320px;max-height:calc(100% - 90px);overflow:auto}
+#insp[hidden],#modal[hidden],aside[hidden],.btn[hidden]{display:none}
+#side-show{position:fixed;left:16px;top:16px;z-index:10;width:auto;padding:7px 12px;gap:8px}
+#side-show .logo{font-size:14px}
+.btn.on{border-color:var(--accent);color:var(--accent);background:rgba(122,162,255,.1)}
+.btn.ghost{background:none;border-color:transparent;color:var(--muted)}
+.btn.ghost:hover{color:var(--text);background:#1f1f1f}
+.inhead{display:flex;gap:6px;align-items:flex-start;margin-bottom:6px}
+.inhead .crumb{flex:1;margin:6px 0 0}
+.sep{width:1px;height:20px;background:var(--line);margin:0 4px}
+.full{grid-column:1/-1}
+.row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.row.wrap{flex-wrap:wrap}
+.sp{flex:1}
+.brand{font-size:14px;margin-bottom:12px}
+.logo{color:var(--accent);font-size:16px}
+.muted{color:var(--muted)} .small{font-size:12px} .tiny{font-size:11px;line-height:1.4}
+input,select,textarea{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:7px;padding:7px 9px;font:13px var(--font);outline:none}
+textarea{resize:vertical;min-height:60px}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+select{appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 14px) 50%,calc(100% - 9px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:24px}
+.btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:7px;padding:6px 10px;font:12.5px var(--font);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;justify-content:center}
+.btn:hover{background:#222;border-color:#333}
+.btn.icon{width:32px;padding:6px 0;flex:none}
+.btn.danger{color:var(--bad);width:100%;margin-top:8px}
+.btn.primary{background:var(--accent);color:#0a0a0a;border-color:var(--accent);font-weight:600}
+kbd{font:10.5px ui-monospace,Menlo,monospace;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+a{color:var(--muted)} a:hover{color:var(--text)}
+.search{position:relative;margin-bottom:8px}
+.search input{padding-left:30px;padding-right:28px}
+.search .mag{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.search .x{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;color:var(--muted);cursor:pointer;font-size:16px}
+details.menu{position:relative}
+details.menu summary{list-style:none}
+details.menu summary::-webkit-details-marker{display:none}
+details.menu .pop{position:absolute;top:calc(100% + 4px);left:0;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px;z-index:20;min-width:170px;display:flex;flex-direction:column}
+details.menu .pop button{background:none;border:0;color:var(--text);text-align:left;padding:7px 10px;border-radius:5px;cursor:pointer;font:12.5px var(--font)}
+details.menu .pop button:hover{background:#262626}
+details.help{margin:6px 0 8px;border-top:1px solid var(--line);padding-top:8px}
+details.help summary{cursor:pointer;color:var(--muted);font-size:12px}
+details.help table{width:100%;font-size:11.5px;margin-top:6px;border-collapse:collapse}
+details.help td{padding:2px 0;vertical-align:top}
+details.help td:first-child{color:var(--muted);white-space:nowrap;padding-right:10px}
+label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:9px}
+label>input,label>select,label>textarea,label>.urlrow{margin-top:4px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.urlrow{display:flex;gap:6px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.crumb{font-size:11px;color:var(--dim);margin-bottom:10px;line-height:1.5;word-break:break-word}
+#zoom{position:fixed;right:16px;bottom:16px;display:flex;gap:4px;align-items:center;z-index:10}
+#zoomPct{color:var(--muted);font-size:11px;width:40px;text-align:center}
+#hint{position:fixed;left:18px;bottom:22px;color:var(--dim);font-size:11px;pointer-events:none;max-width:calc(100% - 520px)}
+@media (max-width:1000px){#hint{display:none}}
+#toast{position:fixed;left:50%;bottom:56px;transform:translateX(-50%);background:#1f1f1f;border:1px solid #333;color:var(--text);padding:8px 14px;border-radius:8px;font-size:12.5px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:50}
+#toast.on{opacity:1}
+#ghost{position:fixed;display:none;pointer-events:none;background:#1f1f1f;border:1px solid var(--accent);color:var(--text);padding:3px 8px;border-radius:6px;font-size:12px;z-index:60}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:40;display:flex;align-items:center;justify-content:center}
+#modal .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;width:min(820px,94vw);max-height:92vh;display:flex;flex-direction:column;gap:10px}
+.dlg{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:45;display:flex;align-items:center;justify-content:center}
+.dlg[hidden]{display:none}
+.dlg .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;width:min(420px,92vw);display:flex;flex-direction:column;gap:12px}
+.dlg h3{margin:0;font-size:14px}
+#modal textarea{flex:1;min-height:340px;font:12.5px/1.55 ui-monospace,Menlo,monospace;white-space:pre;tab-size:2}
+#modal h3{margin:0;font-size:15px}
+#modal .fmt{font-size:11.5px;color:var(--muted);line-height:1.55}
+#modal code{font:11.5px ui-monospace,Menlo,monospace;color:#cfcfcf;background:#1d1d1d;padding:0 4px;border-radius:3px}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:4px}
+@media (max-width:760px){#side{width:calc(100% - 32px);max-height:45%}#insp{top:auto;bottom:64px;left:16px;right:16px;width:auto;max-height:45%}}
+</style>
+</head>
+<body>
+
+<svg id="stage" xmlns="http://www.w3.org/2000/svg"><g id="vp"><g id="edges"></g><g id="nodes"></g></g></svg>
+
+<aside id="side">
+  <div class="row brand"><span class="logo">◈</span><b>OSINT Graph</b><span class="sp"></span><span id="saved" class="muted tiny"></span><button class="btn icon ghost" id="side-hide" title="Скрыть панель (H)">«</button></div>
+  <div class="row">
+    <select id="case" title="Дело"></select>
+    <button class="btn icon" id="b-new" title="Новое дело">＋</button>
+    <button class="btn icon" id="b-delcase" title="Удалить дело">🗑</button>
+  </div>
+  <div class="search">
+    <svg class="mag" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="q" placeholder="Поиск: имя, ссылка, заметка" autocomplete="off" spellcheck="false">
+    <button class="x" id="q-x" title="Очистить">×</button>
+  </div>
+  <div class="row"><select id="tf" title="Фильтр по типу"></select></div>
+  <div class="row small muted"><span id="stats"></span><span class="sp"></span><a href="#" id="reset">Сброс</a></div>
+  <div class="row wrap">
+    <button class="btn" id="b-text" title="Редактировать всё дело как текстовый список">Текст ⇄ граф</button>
+    <button class="btn" id="b-import" title="JSON, TXT или Markdown">Импорт</button>
+    <details class="menu"><summary class="btn">Экспорт ▾</summary>
+      <div class="pop">
+        <button data-exp="json">JSON — бэкап дела</button>
+        <button data-exp="txt">Текст (.txt)</button>
+        <button data-exp="svg">Картинка SVG</button>
+        <button data-exp="png">Картинка PNG</button>
+      </div>
+    </details>
+  </div>
+  <details class="help"><summary>Горячие клавиши</summary>
+    <table>
+      <tr><td>Tab</td><td>добавить дочерний узел</td></tr>
+      <tr><td>Enter</td><td>добавить узел рядом</td></tr>
+      <tr><td>F2 / двойной клик</td><td>переименовать</td></tr>
+      <tr><td>⌫ / Delete</td><td>удалить ветку</td></tr>
+      <tr><td>Кнопка ⊖ / ⊕</td><td>закрыть / открыть ветку</td></tr>
+      <tr><td>Space</td><td>закрыть / открыть ветку</td></tr>
+      <tr><td>G</td><td>оставить открытой только эту ветку</td></tr>
+      <tr><td>◎ внизу</td><td>режим фокуса: соседние ветки закрываются сами</td></tr>
+      <tr><td>H</td><td>скрыть / показать все панели</td></tr>
+      <tr><td>← ↑ ↓ →</td><td>ходить по графу</td></tr>
+      <tr><td>Alt + ↑ ↓</td><td>переставить среди соседей</td></tr>
+      <tr><td>Перетащить узел</td><td>перенести в другую ветку</td></tr>
+      <tr><td>⌘ + клик</td><td>открыть ссылку узла</td></tr>
+      <tr><td>⌘C / ⌘X</td><td>копировать / вырезать ветку как текст</td></tr>
+      <tr><td>⌘V</td><td>вставить список строк в выбранный узел</td></tr>
+      <tr><td>⌘Z / ⇧⌘Z</td><td>отменить / вернуть</td></tr>
+      <tr><td>/ или ⌘F</td><td>поиск</td></tr>
+      <tr><td>F</td><td>вписать граф в экран</td></tr>
+      <tr><td>Щипок / ⌘ + колесо</td><td>масштаб</td></tr>
+    </table>
+  </details>
+  <div class="tiny muted" id="store-note">Данные хранятся только в этом браузере, никуда не отправляются. Для бэкапа: Экспорт → JSON.</div>
+  <input type="file" id="file" accept=".json,.txt,.md,.markdown" hidden>
+</aside>
+
+<aside id="insp" hidden>
+  <div class="inhead"><div class="crumb" id="crumb"></div><button class="btn icon ghost" id="insp-hide" title="Скрыть карточку (H — скрыть все панели)">×</button></div>
+  <label>Название<input id="f-name" autocomplete="off" spellcheck="false"></label>
+  <div class="two">
+    <label>Тип<select id="f-type"></select></label>
+    <label>Статус<select id="f-status"></select></label>
+  </div>
+  <label>Ссылка<div class="urlrow"><input id="f-url" placeholder="https://…" autocomplete="off" spellcheck="false"><button class="btn icon" id="b-open" title="Открыть ссылку">↗</button></div></label>
+  <label>Заметка<textarea id="f-note" rows="6" placeholder="Что нашли, откуда, когда, насколько уверены…"></textarea></label>
+  <div class="grid">
+    <button class="btn" id="b-child">＋ Дочерний <kbd>Tab</kbd></button>
+    <button class="btn" id="b-sib">＋ Рядом <kbd>Enter</kbd></button>
+    <button class="btn" id="b-paste">Вставить списком</button>
+    <button class="btn" id="b-col">Свернуть <kbd>Space</kbd></button>
+    <button class="btn" id="b-up">↑ Выше</button>
+    <button class="btn" id="b-down">↓ Ниже</button>
+    <button class="btn full" id="b-focus" title="Закрыть все остальные ветки, открыть только путь к этому узлу">◎ Оставить открытой только эту ветку <kbd>G</kbd></button>
+  </div>
+  <button class="btn danger" id="b-del">Удалить ветку <kbd>⌫</kbd></button>
+</aside>
+
+<button class="btn" id="side-show" title="Показать панель (H)" hidden><span class="logo">◈</span> Меню</button>
+<div id="zoom">
+  <button class="btn icon" id="t-side" title="Панель слева: показать / скрыть">☰</button>
+  <button class="btn icon" id="t-insp" title="Карточка узла справа: показать / скрыть">✎</button>
+  <button class="btn icon" id="t-focus" title="Режим фокуса: открываешь ветку — соседние ветки сами закрываются">◎</button>
+  <span class="sep"></span>
+  <button class="btn icon" id="z-exp" title="Развернуть всё">⊞</button>
+  <button class="btn icon" id="z-col" title="Свернуть до первого уровня">⊟</button>
+  <button class="btn icon" id="z-out" title="Уменьшить">−</button>
+  <span id="zoomPct">100%</span>
+  <button class="btn icon" id="z-in" title="Увеличить">+</button>
+  <button class="btn icon" id="z-fit" title="Вписать (F)">⤢</button>
+</div>
+<div id="hint">Tab — новый узел · перетаскивание фона — сдвиг · щипок — масштаб</div>
+
+<div id="modal" hidden>
+  <div class="box">
+    <h3 id="t-title">Текст</h3>
+    <div class="fmt">
+      Одна строка = один узел, отступ (Tab или 2 пробела) = вложенность. Поля через <code>|</code> в любом порядке:
+      <code>Название | тип | ссылка | статус | // заметка</code><br>
+      Типы: <span id="t-types"></span>. Статус: <code>✓</code> подтверждено, <code>?</code> вероятно, <code>✗</code> ложный след.<br>
+      Можно просто вставить список ссылок, Markdown-список или заголовки <code>#</code>.
+    </div>
+    <textarea id="t-area" spellcheck="false"></textarea>
+    <div class="row" style="margin:0">
+      <span class="muted small" id="t-sub"></span><span class="sp"></span>
+      <button class="btn" id="t-cancel">Отмена <kbd>Esc</kbd></button>
+      <button class="btn primary" id="t-apply">Применить <kbd>⌘↵</kbd></button>
+    </div>
+  </div>
+</div>
+<div id="ask" class="dlg" hidden>
+  <div class="box">
+    <h3 id="ask-title"></h3>
+    <input id="ask-input" autocomplete="off" spellcheck="false">
+    <div class="row" style="margin:0"><span class="sp"></span><button class="btn" id="ask-cancel">Отмена</button><button class="btn primary" id="ask-ok">OK</button></div>
+  </div>
+</div>
+<div id="toast"></div><div id="ghost"></div>
+
+<script>
+'use strict';
+/* ---------- константы ---------- */
+const TYPES = {
+  group:{label:'Группа',icon:''},
+  person:{label:'Персона',icon:'👤'},
+  org:{label:'Организация',icon:'🏢'},
+  username:{label:'Никнейм',icon:'@'},
+  email:{label:'Email',icon:'✉️'},
+  phone:{label:'Телефон',icon:'📞'},
+  social:{label:'Аккаунт / соцсеть',icon:'💬'},
+  domain:{label:'Домен / сайт',icon:'🌐'},
+  ip:{label:'IP / хост',icon:'🖥️'},
+  location:{label:'Место',icon:'📍'},
+  photo:{label:'Фото / медиа',icon:'🖼️'},
+  document:{label:'Документ',icon:'📄'},
+  vehicle:{label:'Транспорт',icon:'🚗'},
+  crypto:{label:'Крипто / финансы',icon:'🪙'},
+  event:{label:'Событие / дата',icon:'📅'},
+  tool:{label:'Инструмент',icon:'🛠️'},
+  link:{label:'Ссылка / источник',icon:'🔗'},
+  note:{label:'Заметка',icon:'📝'},
+};
+const STATUS = {'':{label:'—',out:''}, ok:{label:'✓ Подтверждено',out:'✓'}, maybe:{label:'? Вероятно',out:'?'}, no:{label:'✗ Ложный след',out:'✗'}};
+const STATUS_ALIAS = {'✓':'ok','ok':'ok','+':'ok','подтверждено':'ok','confirmed':'ok','?':'maybe','maybe':'maybe','вероятно':'maybe','✗':'no','x':'no','х':'no','no':'no','false':'no','ложный':'no','ложный след':'no'};
+const TYPE_ALIAS = {};
+for (const [k,v] of Object.entries(TYPES)) { TYPE_ALIAS[k]=k; TYPE_ALIAS[v.label.toLowerCase()]=k; v.label.toLowerCase().split(/\s*\/\s*/).forEach(p=>TYPE_ALIAS[p]=k); }
+const ROW = 28, GAP = 84;
+const KEY = 'osint-graph:v1';
+const FONT = getComputedStyle(document.documentElement).getPropertyValue('--font');
+const SVG_CSS = `
+.edge{fill:none;stroke:rgba(255,255,255,.33);stroke-width:1}
+.dot{fill:#d4d4d4}
+.hit{fill:transparent}
+.node{cursor:pointer}
+.node:hover .hit{fill:rgba(255,255,255,.05)}
+.sel .hit{fill:rgba(122,162,255,.14);stroke:rgba(122,162,255,.65);stroke-width:1}
+.drop .hit{fill:rgba(74,222,128,.16);stroke:#4ade80;stroke-width:1}
+#nodes text,svg.export text{font:13px ${FONT};fill:#e4e4e4;dominant-baseline:central}
+.root .lbl{font-size:14px;font-weight:600}
+.rootico{fill:#7aa2ff}
+#nodes .ico,svg.export .ico{font-size:12px;fill:#9aa4b8}
+.lbl .m{font-weight:700;fill:#fff}
+#nodes .ctx .lbl,svg.export .ctx .lbl{fill:#9a9a9a}
+#nodes .false .lbl,svg.export .false .lbl{fill:#6f6f6f}
+#nodes .badge,svg.export .badge{font-size:11px;fill:#8a8a8a}
+.st-ok{fill:#4ade80}.st-maybe{fill:#fbbf24}.st-no{fill:#f87171}
+.tgl{cursor:pointer}
+.tgl circle{fill:#0d0d0d;stroke:#4a4a4a;stroke-width:1}
+.tgl path{stroke:#bdbdbd;stroke-width:1.4;fill:none}
+.tgl:hover circle{stroke:#7aa2ff;fill:#151c2c}
+.tgl.closed circle{stroke:#7aa2ff;fill:#131a29}
+.tgl.closed path{stroke:#cfdcff}
+`;
+document.head.insertAdjacentHTML('beforeend', '<style>'+SVG_CSS+'</style>');
+
+/* ---------- утилиты ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Math.random().toString(36).slice(2,8) + Date.now().toString(36).slice(-4);
+const mk = (name, type='group', extra={}) => ({id:uid(), name, type, url:'', note:'', status:'', collapsed:false, children:[], ...extra});
+const cv = document.createElement('canvas').getContext('2d');
+function measure(s, root=false){ cv.font = (root ? '600 14px ' : '13px ') + FONT; return Math.ceil(cv.measureText(s).width * (query ? 1.05 : 1)); }
+let toastT;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'), 2200); }
+function countDesc(n){ let c=0; for(const k of n.children) c += 1 + countDesc(k); return c; }
+function isTyping(){ const a=document.activeElement; return a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA' || a.tagName==='SELECT' || a.isContentEditable); }
+
+/* ---------- пример ---------- */
+function N(name, type='group', o={}, kids=[]){ const n=mk(name,type,o); n.children=kids; return n; }
+function sample(){
+  return N('Дело 001 · nightowl_92', 'group', {note:'Пример. Удалите или переименуйте. Tab — добавить узел.'}, [
+    N('Исходные данные', 'group', {}, [
+      N('nightowl_92', 'username', {status:'ok', note:'Ник из запроса заказчика'}),
+      N('Аватар профиля', 'photo', {note:'Скачан 25.11, нужен обратный поиск'}),
+    ]),
+    N('Аккаунты', 'group', {}, [
+      N('Соцсети', 'group', {}, [
+        N('Telegram @nightowl_92', 'social', {status:'maybe'}),
+        N('Instagram nightowl.92', 'social', {status:'maybe', note:'Совпадает аватар'}),
+        N('VK id…', 'social'),
+      ]),
+      N('Форумы', 'group', {}, [
+        N('Reddit u/nightowl_92', 'social', {status:'no', note:'Другой человек, совпадение ника'}),
+      ]),
+    ]),
+    N('Контакты', 'group', {}, [
+      N('n.owl92@example.com', 'email', {status:'maybe', note:'Из восстановления пароля'}),
+      N('+7 9xx xxx-xx-xx', 'phone'),
+    ]),
+    N('Геолокация', 'group', {}, [
+      N('Город по фото с набережной', 'location', {note:'Сверить по панорамам'}),
+    ]),
+    N('Инструменты', 'group', {}, [
+      N('WhatsMyName', 'tool', {url:'https://whatsmyname.app'}),
+      N('Yandex Images', 'tool', {url:'https://yandex.com/images'}),
+      N('Google Lens', 'tool', {url:'https://lens.google.com'}),
+      N('Epieos', 'tool', {url:'https://epieos.com'}),
+    ]),
+  ]);
+}
+
+/* ---------- хранилище ---------- */
+function fix(n){
+  if(!n || typeof n!=='object') n={};
+  n.id = typeof n.id==='string' && n.id ? n.id : uid();
+  n.name = String(n.name ?? '');
+  n.type = TYPES[n.type] ? n.type : 'group';
+  n.url = typeof n.url==='string' ? n.url : '';
+  n.note = typeof n.note==='string' ? n.note : '';
+  n.status = STATUS[n.status] ? n.status : '';
+  n.collapsed = !!n.collapsed;
+  n.children = Array.isArray(n.children) ? n.children.map(fix) : [];
+  return n;
+}
+function norm(o){ // импорт произвольного JSON-дерева (в т.ч. OSINT-Framework arf.json)
+  if(typeof o==='string') return mk(o);
+  const n = mk(String(o.name ?? o.title ?? o.label ?? o.text ?? 'Без названия'));
+  n.url = typeof o.url==='string' ? o.url : (typeof o.link==='string' ? o.link : '');
+  n.type = TYPES[o.type] ? o.type : (n.url ? 'link' : 'group');
+  n.note = typeof o.note==='string' ? o.note : (typeof o.description==='string' ? o.description : '');
+  n.status = STATUS[o.status] ? o.status : '';
+  n.collapsed = !!o.collapsed;
+  n.children = Array.isArray(o.children) ? o.children.map(norm) : [];
+  return n;
+}
+/* программа (Electron — Windows/macOS/Linux, или нативная обёртка macOS):
+   данные в файле, экспорт через системное окно «Сохранить», ссылки — в системный браузер */
+const BRIDGE = window.osintNative
+  || ((window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.native)
+      ? {post: m => window.webkit.messageHandlers.native.postMessage(m), initialData: window.__NATIVE_DATA__,
+         dataPath: '~/Library/Application Support/OSINT Graph/data.json'}
+      : null);
+const NATIVE = !!BRIDGE;
+function native(msg){ try{ BRIDGE.post(msg); return true; }catch(e){ return false; } }
+function loadStore(){
+  const ok = s => s && Array.isArray(s.cases) && s.cases.length;
+  if(NATIVE && ok(BRIDGE.initialData)) return BRIDGE.initialData;
+  try{ const s=JSON.parse(localStorage.getItem(KEY)); if(ok(s)) return s; }catch(e){}
+  return null;
+}
+function persist(){
+  const json = JSON.stringify(store);
+  let ok = NATIVE ? native({type:'save', data:json}) : false;
+  try{ localStorage.setItem(KEY, json); ok = true; }catch(e){}
+  return ok;
+}
+let saveT;
+function save(){
+  clearTimeout(saveT);
+  saveT = setTimeout(()=>{
+    if(cur) cur.updated = Date.now();
+    if(persist()) $('#saved').textContent='сохранено';
+    else { $('#saved').textContent='⚠ не сохранено'; toast('Не удалось сохранить — сделайте Экспорт → JSON'); }
+  }, 250);
+}
+window.addEventListener('beforeunload', ()=>{ persist(); });
+
+/* ---------- состояние ---------- */
+let store, cur, selectedId=null, query='', typeFilter='';
+let view = {x:0, y:0, k:1};
+let idx = new Map(), vis = new Set(), matchSet = new Set();
+let lastItems = [], itemById = new Map(), lastLinks = '';
+let undoStack=[], redoStack=[], editing=false;
+
+function reindex(){ idx.clear(); (function w(n,p){ idx.set(n.id,{n,p}); n.children.forEach(c=>w(c,n)); })(cur.root,null); }
+const selNode = () => idx.get(selectedId)?.n || null;
+const parentOf = n => idx.get(n.id)?.p || null;
+const tokens = () => query.toLowerCase().split(/\s+/).filter(Boolean);
+const isFiltering = () => !!(query.trim() || typeFilter);
+
+/* ---------- фильтр ---------- */
+function nodeMatches(n, t){
+  if(typeFilter && n.type!==typeFilter) return false;
+  if(!t.length) return true;
+  const hay = (n.name+' '+n.url+' '+n.note).toLowerCase();
+  return t.every(x => hay.includes(x));
+}
+function computeVisible(){
+  matchSet = new Set(); vis = new Set();
+  if(!isFiltering()) return;
+  const t = tokens();
+  (function w(n){
+    let any=false;
+    if(n!==cur.root && nodeMatches(n,t)){ matchSet.add(n.id); any=true; }
+    for(const c of n.children) if(w(c)) any=true;
+    if(any) vis.add(n.id);
+    return any;
+  })(cur.root);
+  vis.add(cur.root.id);
+}
+function kids(n){ return isFiltering() ? n.children.filter(c=>vis.has(c.id)) : (n.collapsed ? [] : n.children); }
+
+/* ---------- раскладка + отрисовка ---------- */
+function hl(text, t){
+  if(!t.length) return esc(text);
+  const low=text.toLowerCase(), r=[];
+  for(const x of t){ let i=0; while((i=low.indexOf(x,i))!==-1){ r.push([i,i+x.length]); i+=x.length; } }
+  if(!r.length) return esc(text);
+  r.sort((a,b)=>a[0]-b[0]);
+  const m=[];
+  for(const a of r){ if(m.length && a[0]<=m.at(-1)[1]) m.at(-1)[1]=Math.max(m.at(-1)[1],a[1]); else m.push([...a]); }
+  let o='', p=0;
+  for(const [a,b] of m){ o += esc(text.slice(p,a)) + `<tspan class="m">${esc(text.slice(a,b))}</tspan>`; p=b; }
+  return o + esc(text.slice(p));
+}
+
+function layout(){
+  const filtering = isFiltering();
+  const items=[], colW=[];
+  let leaf=0;
+  function walk(n, d){
+    const ks = kids(n), isRoot = n===cur.root;
+    const it = {n, d, ks:[]};
+    it.text = n.name || 'Без названия';
+    it.icon = isRoot ? '◈' : TYPES[n.type].icon;
+    it.iconW = it.icon ? 18 : 0;
+    it.tw = measure(it.text, isRoot);
+    it.hidden = (!filtering && n.collapsed) ? countDesc(n) : 0;
+    it.badge = it.hidden ? '+'+it.hidden : '';
+    it.bw = it.badge ? measure(it.badge)+8 : 0;
+    it.w = it.iconW + it.tw + (n.status ? 12 : 0) + it.bw;
+    it.hasOut = ks.length>0 || it.hidden>0;
+    it.ox = 8 + it.w + (it.hasOut ? 14 : 6);
+    colW[d] = Math.max(colW[d]||0, it.ox + (it.hasOut ? 10 : 4));
+    items.push(it);
+    if(ks.length){ it.ks = ks.map(c=>walk(c,d+1)); it.y = (it.ks[0].y + it.ks.at(-1).y)/2; }
+    else { it.y = leaf*ROW; leaf++; }
+    return it;
+  }
+  walk(cur.root, 0);
+  const colX=[0];
+  for(let d=0; d<colW.length; d++) colX[d+1] = colX[d] + colW[d] + GAP;
+  for(const it of items) it.x = colX[it.d];
+  return items;
+}
+
+function nodeSVG(it, t, filtering, forExport=false){
+  const n=it.n, isRoot = n===cur.root;
+  const cls = ['node'];
+  if(!forExport && n.id===selectedId) cls.push('sel');
+  if(isRoot) cls.push('root');
+  if(filtering && !isRoot && !matchSet.has(n.id)) cls.push('ctx');
+  if(n.status==='no') cls.push('false');
+  let s = `<g class="${cls.join(' ')}" data-id="${n.id}" transform="translate(${it.x},${it.y})">`;
+  const tip = [n.url, n.note].filter(Boolean).join('\n');
+  if(tip && !forExport) s += `<title>${esc(tip)}</title>`;
+  s += `<rect class="hit" x="2" y="-12" width="${it.w+14}" height="24" rx="5"/>`;
+  if(!isRoot) s += `<circle class="dot" r="2"/>`;
+  let x = 8;
+  if(it.icon){ s += `<text class="ico${isRoot?' rootico':''}" x="${x}">${esc(it.icon)}</text>`; x += it.iconW; }
+  s += `<text class="lbl" x="${x}">${hl(it.text, t)}</text>`; x += it.tw;
+  if(n.status){ s += `<circle class="st-${n.status}" cx="${x+7}" r="3"/>`; x += 12; }
+  if(it.badge) s += `<text class="badge" x="${x+6}">${it.badge}</text>`;
+  if(it.hasOut){
+    if(forExport) s += `<circle class="dot" cx="${it.ox}" r="2"/>`;
+    else s += `<g class="tgl${it.hidden?' closed':''}" transform="translate(${it.ox},0)"><title>${it.hidden?'Открыть ветку':'Закрыть ветку'}</title><circle r="7"/><path d="M-3.5,0H3.5${it.hidden?'M0,-3.5V3.5':''}"/></g>`;
+  }
+  return s + '</g>';
+}
+
+function render(){
+  reindex(); computeVisible();
+  const t = tokens(), filtering = isFiltering();
+  lastItems = layout();
+  itemById = new Map(lastItems.map(it=>[it.n.id, it]));
+  let links='';
+  for(const it of lastItems) for(const c of it.ks){
+    const x1=it.x+it.ox, y1=it.y, x2=c.x, y2=c.y, mx=(x1+x2)/2;
+    links += `<path class="edge" d="M${x1},${y1}C${mx},${y1} ${mx},${y2} ${x2},${y2}"/>`;
+  }
+  lastLinks = links;
+  $('#edges').innerHTML = links;
+  $('#nodes').innerHTML = lastItems.map(it=>nodeSVG(it,t,filtering)).join('');
+  const total = idx.size - 1;
+  $('#stats').textContent = filtering ? `${matchSet.size} из ${total} узлов` : `${total} узлов в деле`;
+  $('#reset').style.visibility = filtering ? 'visible' : 'hidden';
+}
+let rq=0;
+function scheduleRender(){ if(rq) return; rq=requestAnimationFrame(()=>{ rq=0; render(); refreshCaseLabels(); }); }
+
+/* ---------- вид ---------- */
+function applyView(){ $('#vp').setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`); $('#zoomPct').textContent = Math.round(view.k*100)+'%'; }
+function bounds(){
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(const it of lastItems){ x0=Math.min(x0,it.x); x1=Math.max(x1,it.x+it.ox+10); y0=Math.min(y0,it.y-14); y1=Math.max(y1,it.y+14); }
+  return {x0,y0,x1,y1};
+}
+const narrow = () => innerWidth < 760;
+function leftEdge(){ if(narrow()) return 16; if($('#side').hidden) return 30; return $('#side').getBoundingClientRect().right + 16; }
+function rightInset(){ return (!narrow() && !$('#insp').hidden) ? 352 : 16; }
+function fit(){
+  const b = bounds(); if(!isFinite(b.x0)) return;
+  const L = leftEdge(), W = Math.max(200, innerWidth - L - rightInset() - 40), H = Math.max(200, innerHeight - 90);
+  const k = Math.max(.12, Math.min(1.15, W/(b.x1-b.x0), H/(b.y1-b.y0)));
+  view.k = k;
+  view.x = L + 20 + (W - (b.x1-b.x0)*k)/2 - b.x0*k;
+  view.y = 40 + (H - (b.y1-b.y0)*k)/2 - b.y0*k;
+  applyView();
+}
+let autoFit = true; // пока пользователь сам не двигал вид — вписываем при ресайзе
+function zoomAt(f, cx, cy){ autoFit=false; const k=Math.min(3, Math.max(.1, view.k*f)); f=k/view.k; view.x=cx-(cx-view.x)*f; view.y=cy-(cy-view.y)*f; view.k=k; applyView(); }
+function ensureVisible(id){
+  const it = itemById.get(id); if(!it) return;
+  const k=view.k, sx=view.x+it.x*k, ex=view.x+(it.x+it.ox+12)*k, sy=view.y+it.y*k;
+  const L=leftEdge(), R=innerWidth-rightInset();
+  let dx=0, dy=0;
+  if(sx < L) dx = L - sx + 30; else if(ex > R) dx = R - ex - 30;
+  if(sy < 50) dy = 50 - sy + 40; else if(sy > innerHeight-60) dy = innerHeight - 60 - sy - 40;
+  if(dx||dy){ view.x+=dx; view.y+=dy; applyView(); }
+}
+
+/* ---------- инспектор ---------- */
+function fillInsp(){
+  const n = selNode(), box = $('#insp');
+  if(!n || !ui.insp){ box.hidden = true; return; }
+  box.hidden = false;
+  const path=[]; for(let p=parentOf(n); p; p=parentOf(p)) path.unshift(p.name||'…');
+  $('#crumb').textContent = path.length ? path.join('  ›  ') : 'Корень дела';
+  $('#f-name').value = n.name;
+  $('#f-type').value = n.type;
+  $('#f-status').value = n.status;
+  $('#f-url').value = n.url;
+  $('#f-note').value = n.note;
+  $('#b-open').disabled = !n.url.trim();
+  $('#b-col').firstChild.textContent = n.collapsed ? 'Развернуть ' : 'Свернуть ';
+  const isRoot = n===cur.root;
+  $('#b-del').style.display = isRoot ? 'none' : '';
+  $('#b-sib').disabled = isRoot; $('#b-up').disabled = isRoot; $('#b-down').disabled = isRoot;
+}
+function select(id, {focus=false, reveal=false}={}){
+  selectedId = id; editing = false;
+  render(); fillInsp();
+  if(reveal && id) ensureVisible(id);
+  if(focus) focusName();
+}
+function focusName(){ if(!ui.insp){ ui.insp=true; applyUI(); } const el=$('#f-name'); el.focus(); el.select(); }
+
+$('#f-type').innerHTML = Object.entries(TYPES).map(([k,v])=>`<option value="${k}">${v.icon?v.icon+'  ':''}${v.label}</option>`).join('');
+$('#f-status').innerHTML = Object.entries(STATUS).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
+$('#tf').innerHTML = '<option value="">Все типы</option>' + Object.entries(TYPES).map(([k,v])=>`<option value="${k}">${v.icon?v.icon+'  ':''}${v.label}</option>`).join('');
+$('#t-types').innerHTML = Object.keys(TYPES).map(k=>`<code>${k}</code>`).join(' ');
+
+for(const f of ['name','type','url','status','note']){
+  const el = $('#f-'+f);
+  el.addEventListener('input', ()=>{
+    const n = selNode(); if(!n) return;
+    if(!editing){ pushUndo(); editing = true; }
+    n[f] = el.value;
+    if(f==='url') $('#b-open').disabled = !el.value.trim();
+    if(f==='name') { const crumbSelf = 0; }
+    scheduleRender(); save();
+  });
+  el.addEventListener('blur', ()=>{ editing = false; });
+}
+$('#f-name').addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); e.target.blur(); } });
+for(const id of ['#f-url','#f-note','#f-type','#f-status']) $(id).addEventListener('keydown', e=>{ if(e.key==='Escape'){ e.stopPropagation(); e.target.blur(); } });
+
+/* ---------- история ---------- */
+const snap = () => JSON.stringify({root:cur.root, sel:selectedId});
+function pushUndo(){ undoStack.push(snap()); if(undoStack.length>200) undoStack.shift(); redoStack=[]; }
+function restore(s){ const o=JSON.parse(s); cur.root=o.root; selectedId=o.sel; render(); fillInsp(); refreshCaseLabels(); save(); }
+function undo(){ if(!undoStack.length) return toast('Нечего отменять'); redoStack.push(snap()); restore(undoStack.pop()); }
+function redo(){ if(!redoStack.length) return; undoStack.push(snap()); restore(redoStack.pop()); }
+
+/* ---------- действия с узлами ---------- */
+function clearFilter(){ if(!isFiltering()) return; query=''; typeFilter=''; $('#q').value=''; $('#tf').value=''; }
+function addChild(){
+  const p = selNode() || cur.root;
+  pushUndo(); clearFilter();
+  const n = mk('Новый узел'); p.children.push(n); p.collapsed=false;
+  save(); select(n.id, {focus:true, reveal:true});
+}
+function addSibling(){
+  const s = selNode();
+  if(!s || s===cur.root) return addChild();
+  const p = parentOf(s);
+  pushUndo(); clearFilter();
+  const n = mk('Новый узел', s.type);
+  p.children.splice(p.children.indexOf(s)+1, 0, n);
+  save(); select(n.id, {focus:true, reveal:true});
+}
+function deleteSel(){
+  const n = selNode(); if(!n) return;
+  if(n===cur.root) return toast('Корень дела удалить нельзя');
+  const p = parentOf(n), i = p.children.indexOf(n), cnt = countDesc(n);
+  pushUndo();
+  p.children.splice(i,1);
+  const next = p.children[i] || p.children[i-1] || p;
+  save(); select(next.id, {reveal:true});
+  toast(`Удалено: «${n.name}»${cnt?` и ${cnt} вложенных`:''} · ⌘Z — вернуть`);
+}
+function toggle(id){
+  const n = idx.get(id)?.n; if(!n || !n.children.length) return;
+  if(isFiltering()) return toast('Во время поиска ветки раскрыты');
+  n.collapsed = !n.collapsed;
+  if(!n.collapsed && ui.focus) collapseSiblings(n);
+  render(); fillInsp(); save();
+}
+function collapseSiblings(n){
+  const p = parentOf(n); if(!p) return;
+  for(const s of p.children) if(s!==n && s.children.length) s.collapsed = true;
+}
+function focusBranch(){
+  const n = selNode(); if(!n) return;
+  pushUndo(); clearFilter();
+  const path = new Set(); for(let x=n; x; x=parentOf(x)) path.add(x.id);
+  (function w(x){ if(path.has(x.id)){ x.collapsed=false; x.children.forEach(w); } else if(x.children.length) x.collapsed=true; })(cur.root);
+  (function o(x){ x.collapsed=false; x.children.forEach(o); })(n);
+  render(); fillInsp(); save(); fit();
+  toast('Открыта только эта ветка · ⊞ внизу — развернуть всё');
+}
+
+/* ---------- панели ---------- */
+const UI_KEY = 'osint-graph:ui';
+let ui = {side:true, insp:true, focus:false};
+try{ Object.assign(ui, JSON.parse(localStorage.getItem(UI_KEY))||{}); }catch(e){}
+function applyUI(){
+  $('#side').hidden = !ui.side;
+  $('#side-show').hidden = ui.side;
+  $('#t-side').classList.toggle('on', ui.side);
+  $('#t-insp').classList.toggle('on', ui.insp);
+  $('#t-focus').classList.toggle('on', ui.focus);
+  fillInsp();
+  try{ localStorage.setItem(UI_KEY, JSON.stringify(ui)); }catch(e){}
+}
+function togglePanels(){ const show = !(ui.side || ui.insp); ui.side = show; ui.insp = show; applyUI(); }
+function moveSib(dir){
+  const n = selNode(); if(!n || n===cur.root) return;
+  const p = parentOf(n), i = p.children.indexOf(n), j = i+dir;
+  if(j<0 || j>=p.children.length) return;
+  pushUndo(); [p.children[i], p.children[j]] = [p.children[j], p.children[i]];
+  render(); save(); ensureVisible(n.id);
+}
+function setCollapseAll(mode){
+  pushUndo();
+  (function w(n,d){ if(n.children.length) n.collapsed = mode==='collapse' ? d>=1 : false; n.children.forEach(c=>w(c,d+1)); })(cur.root,0);
+  render(); fillInsp(); save(); fit();
+}
+function isDesc(a, b){ for(let x=idx.get(b)?.n; x; x=parentOf(x)) if(x.id===a) return true; return false; }
+function canDrop(src, dst){ return src!==dst && !isDesc(src, dst); }
+function moveNode(src, dst){
+  const n = idx.get(src).n, from = parentOf(n), to = idx.get(dst).n;
+  pushUndo();
+  from.children.splice(from.children.indexOf(n),1);
+  to.children.push(n); to.collapsed=false;
+  save(); select(n.id, {reveal:true});
+  toast(`«${n.name}» → «${to.name}»`);
+}
+function safeUrl(u){
+  u = (u||'').trim(); if(!u) return '';
+  if(/^https?:\/\//i.test(u)) return u;
+  if(/^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(u)) return 'https://'+u;
+  return '';
+}
+function openUrl(id){
+  const n = idx.get(id)?.n; const u = safeUrl(n?.url);
+  if(!u) return toast('У узла нет ссылки');
+  if(NATIVE) native({type:'open', url:u}); else window.open(u, '_blank', 'noopener,noreferrer');
+}
+
+/* ---------- текстовый формат ---------- */
+function line(n){
+  const f = [n.name.replace(/\|/g,'¦')];
+  if(n.type && n.type!=='group') f.push(n.type);
+  if(n.url) f.push(n.url);
+  if(n.status) f.push(STATUS[n.status].out);
+  if(n.note) f.push('// '+n.note.replace(/\|/g,'¦').replace(/\n/g,'\\n'));
+  return f.join(' | ');
+}
+function toOutline(n, d=0){ let s='  '.repeat(d)+line(n)+'\n'; for(const c of n.children) s+=toOutline(c,d+1); return s; }
+function parseLine(body){
+  let name='', url='';
+  const md = body.match(/^\[([^\]]+)\]\(([^)\s]+)\)\s*(.*)$/);
+  if(md){ name=md[1]; url=md[2]; body = md[3] ? md[3].replace(/^[-—:|]\s*/,'') : ''; body = body ? '|'+body : ''; }
+  const parts = body.split('|').map(s=>s.trim());
+  if(!md) name = parts.shift() || ''; else parts.shift();
+  const n = mk('');
+  if(!url){ const m = name.match(/(https?:\/\/\S+)/i); if(m){ url = m[1]; name = name.replace(m[1],'').replace(/[\s:—-]+$/,'').trim(); } }
+  for(const p of parts){
+    if(!p) continue;
+    const low = p.toLowerCase();
+    if(p.startsWith('//')) n.note += (n.note?'\n':'') + p.slice(2).trim().replace(/\\n/g,'\n');
+    else if(TYPE_ALIAS[low] && n.type==='group') n.type = TYPE_ALIAS[low];
+    else if(!url && /^(https?:\/\/|www\.)\S+$/i.test(p)) url = p;
+    else if(STATUS_ALIAS[low] && !n.status) n.status = STATUS_ALIAS[low];
+    else n.note += (n.note?'\n':'') + p.replace(/\\n/g,'\n');
+  }
+  if(!name && url){ try{ const u=new URL(url.startsWith('http')?url:'https://'+url); name = u.hostname.replace(/^www\./,'') + (u.pathname.length>1 ? u.pathname : ''); }catch(e){ name=url; } }
+  n.name = name.replace(/¦/g,'|') || 'Без названия';
+  n.url = url;
+  if(url && n.type==='group') n.type = 'link';
+  return n;
+}
+function parseOutline(text){
+  const roots=[], stack=[];
+  for(const raw of text.replace(/\r/g,'').split('\n')){
+    if(!raw.trim()) continue;
+    const ws = raw.match(/^[\t ]*/)[0];
+    let body = raw.slice(ws.length), ind;
+    const h = body.match(/^(#{1,6})\s+(.*)$/);
+    if(h){ ind = h[1].length - 1; body = h[2]; }
+    else { ind = 100 + ws.replace(/\t/g,'    ').length; body = body.replace(/^([-*+•]|\d+[.)])\s+/, '').replace(/^\[[ xX]\]\s+/, ''); }
+    const node = parseLine(body.trim());
+    while(stack.length && stack.at(-1).ind >= ind) stack.pop();
+    if(stack.length) stack.at(-1).n.children.push(node); else roots.push(node);
+    stack.push({ind, n:node});
+  }
+  return roots;
+}
+function insertOutline(txt){
+  const rs = parseOutline(txt); if(!rs.length) return toast('Не нашёл строк для вставки');
+  const target = selNode() || cur.root;
+  pushUndo(); clearFilter();
+  target.children.push(...rs); target.collapsed=false;
+  const cnt = rs.reduce((a,n)=>a+1+countDesc(n),0);
+  save(); select(rs[0].id, {reveal:true});
+  toast(`Добавлено узлов: ${cnt} → «${target.name}»`);
+}
+
+/* ---------- модалка текста ---------- */
+let textMode = 'all';
+function openText(mode){
+  textMode = mode;
+  const n = selNode() || cur.root;
+  $('#t-title').textContent = mode==='all' ? 'Всё дело как текст' : `Вставить списком в «${n.name}»`;
+  $('#t-sub').textContent = mode==='all' ? 'Изменения заменят граф целиком (⌘Z вернёт как было)' : 'Строки станут дочерними узлами';
+  $('#t-area').value = mode==='all' ? toOutline(cur.root) : '';
+  $('#modal').hidden = false;
+  $('#t-area').focus();
+}
+function closeModal(){ $('#modal').hidden = true; }
+function applyText(){
+  const val = $('#t-area').value;
+  if(textMode==='all'){
+    const rs = parseOutline(val); if(!rs.length) return toast('Пусто — граф не изменён');
+    pushUndo(); clearFilter();
+    cur.root = rs.length===1 ? rs[0] : Object.assign(mk(cur.root.name), {children:rs});
+    selectedId = null; closeModal(); render(); fillInsp(); refreshCaseLabels(); save(); fit();
+  } else { closeModal(); insertOutline(val); }
+}
+$('#t-area').addEventListener('keydown', e=>{
+  if(e.key==='Tab'){ // Tab = отступ внутри textarea
+    e.preventDefault(); const a=e.target, s=a.selectionStart, en=a.selectionEnd;
+    a.setRangeText('  ', s, en, 'end');
+  }
+});
+$('#t-cancel').onclick = closeModal;
+$('#t-apply').onclick = applyText;
+$('#modal').addEventListener('pointerdown', e=>{ if(e.target.id==='modal') closeModal(); });
+
+/* ---------- дела ---------- */
+function refreshCaseLabels(){
+  $('#case').innerHTML = store.cases.map(c=>`<option value="${c.id}">${esc(c.root.name||'Без названия')}</option>`).join('');
+  $('#case').value = cur.id;
+}
+function openCase(id){
+  cur = store.cases.find(c=>c.id===id) || store.cases[0];
+  store.current = cur.id; selectedId=null; undoStack=[]; redoStack=[];
+  clearFilter(); render(); fillInsp(); refreshCaseLabels(); save(); fit();
+}
+function newCase(root){ const c={id:uid(), root:fix(root), updated:Date.now()}; store.cases.unshift(c); openCase(c.id); }
+$('#case').onchange = e => openCase(e.target.value);
+/* своё окно ввода вместо prompt() — prompt не работает в Electron */
+function askText(title, def=''){
+  return new Promise(resolve => {
+    const box=$('#ask'), inp=$('#ask-input');
+    $('#ask-title').textContent = title; inp.value = def; box.hidden = false; inp.focus(); inp.select();
+    const done = v => { box.hidden = true; inp.onkeydown = null; $('#ask-ok').onclick = null; $('#ask-cancel').onclick = null; resolve(v); };
+    $('#ask-ok').onclick = () => done(inp.value);
+    $('#ask-cancel').onclick = () => done(null);
+    inp.onkeydown = e => { e.stopPropagation(); if(e.key==='Enter'){ e.preventDefault(); done(inp.value); } if(e.key==='Escape'){ e.preventDefault(); done(null); } };
+  });
+}
+$('#b-new').onclick = async () => {
+  const name = await askText('Название нового дела', 'Новое дело'); if(name===null) return;
+  newCase(mk(name.trim()||'Новое дело')); select(cur.root.id);
+};
+$('#b-delcase').onclick = () => {
+  if(!confirm(`Удалить дело «${cur.root.name}» целиком? Это нельзя отменить. Сначала можно сделать Экспорт → JSON.`)) return;
+  store.cases = store.cases.filter(c=>c!==cur);
+  if(!store.cases.length) store.cases.push({id:uid(), root:mk('Новое дело'), updated:Date.now()});
+  openCase(store.cases[0].id);
+};
+
+/* ---------- импорт / экспорт ---------- */
+function download(name, blob){
+  if(NATIVE){
+    if(/^(text\/|application\/json|image\/svg)/.test(blob.type)) blob.text().then(text => native({type:'export', name, text}));
+    else { const r=new FileReader(); r.onload=()=>native({type:'export', name, base64:String(r.result).split(',')[1]}); r.readAsDataURL(blob); }
+    return;
+  }
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 3000); }
+const fname = () => (cur.root.name||'case').replace(/[\\/:*?"<>|]+/g,'_').trim().slice(0,60) || 'case';
+function exportJSON(){ download(fname()+'.osint.json', new Blob([JSON.stringify({format:'osint-graph', version:1, exported:new Date().toISOString(), root:cur.root}, null, 2)], {type:'application/json'})); toast('Бэкап дела сохранён'); }
+function buildSVG(){
+  const b = bounds(), pad = 40, t = tokens(), filtering = isFiltering();
+  const w = Math.ceil(b.x1-b.x0+pad*2), h = Math.ceil(b.y1-b.y0+pad*2), x = b.x0-pad, y = b.y0-pad;
+  const nodes = lastItems.map(it=>nodeSVG(it,t,filtering,true)).join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" class="export" width="${w}" height="${h}" viewBox="${x} ${y} ${w} ${h}"><style>${SVG_CSS}</style><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#0a0a0a"/>${lastLinks}${nodes}</svg>`;
+  return {svg, w, h};
+}
+function exportPNG(){
+  const {svg, w, h} = buildSVG();
+  const img = new Image();
+  img.onload = () => {
+    const s = Math.min(2, 16000/w, 16000/h);
+    const c = document.createElement('canvas'); c.width = Math.round(w*s); c.height = Math.round(h*s);
+    const ctx = c.getContext('2d'); ctx.scale(s,s); ctx.drawImage(img,0,0,w,h);
+    try{ c.toBlob(b => b ? download(fname()+'.png', b) : toast('PNG не получился — используйте SVG'), 'image/png'); }
+    catch(e){ toast('PNG не получился — используйте SVG'); }
+  };
+  img.onerror = () => toast('PNG не получился — используйте SVG');
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+document.querySelectorAll('[data-exp]').forEach(b => b.onclick = () => {
+  b.closest('details').open = false;
+  const k = b.dataset.exp;
+  if(k==='json') exportJSON();
+  if(k==='txt') download(fname()+'.txt', new Blob([toOutline(cur.root)], {type:'text/plain;charset=utf-8'}));
+  if(k==='svg') download(fname()+'.svg', new Blob([buildSVG().svg], {type:'image/svg+xml'}));
+  if(k==='png') exportPNG();
+});
+$('#b-import').onclick = () => $('#file').click();
+$('#file').onchange = async e => {
+  const f = e.target.files[0]; e.target.value=''; if(!f) return;
+  const txt = await f.text(); let root;
+  try{
+    if(/\.json$/i.test(f.name) || /^\s*[\[{]/.test(txt)){
+      const o = JSON.parse(txt);
+      root = Array.isArray(o) ? Object.assign(mk(f.name.replace(/\.[^.]+$/,'')), {children:o.map(norm)}) : norm(o.root || o);
+    } else {
+      const rs = parseOutline(txt);
+      if(!rs.length) throw 0;
+      root = rs.length===1 ? rs[0] : Object.assign(mk(f.name.replace(/\.[^.]+$/,'')), {children:rs});
+    }
+  }catch(err){ return toast('Не удалось прочитать файл'); }
+  newCase(root); toast(`Импортировано: «${root.name}»`);
+};
+
+/* ---------- кнопки ---------- */
+$('#b-child').onclick = addChild;
+$('#b-sib').onclick = addSibling;
+$('#b-del').onclick = deleteSel;
+$('#b-col').onclick = () => toggle(selectedId);
+$('#b-up').onclick = () => moveSib(-1);
+$('#b-down').onclick = () => moveSib(1);
+$('#b-open').onclick = () => openUrl(selectedId);
+$('#b-paste').onclick = () => openText('insert');
+$('#b-text').onclick = () => openText('all');
+$('#z-in').onclick = () => zoomAt(1.2, innerWidth/2, innerHeight/2);
+$('#z-out').onclick = () => zoomAt(1/1.2, innerWidth/2, innerHeight/2);
+$('#z-fit').onclick = fit;
+$('#b-focus').onclick = focusBranch;
+$('#side-hide').onclick = () => { ui.side=false; applyUI(); };
+$('#side-show').onclick = () => { ui.side=true; applyUI(); };
+$('#insp-hide').onclick = () => { ui.insp=false; applyUI(); };
+$('#t-side').onclick = () => { ui.side=!ui.side; applyUI(); };
+$('#t-insp').onclick = () => { ui.insp=!ui.insp; applyUI(); if(ui.insp && !selectedId) toast('Выберите узел — карточка откроется справа'); };
+$('#t-focus').onclick = () => { ui.focus=!ui.focus; applyUI(); toast(ui.focus ? 'Фокус включён: открываешь ветку — соседние закрываются' : 'Фокус выключен'); };
+$('#z-exp').onclick = () => setCollapseAll('expand');
+$('#z-col').onclick = () => setCollapseAll('collapse');
+document.addEventListener('click', e => { const b=e.target.closest('button,summary'); if(b && document.activeElement===b) b.blur(); });
+document.addEventListener('pointerdown', e => { const d=document.querySelector('details.menu[open]'); if(d && !d.contains(e.target)) d.open=false; });
+
+/* ---------- поиск ---------- */
+let qT;
+const refilter = () => { render(); fit(); };
+$('#q').addEventListener('input', e => { clearTimeout(qT); qT=setTimeout(()=>{ query=e.target.value; refilter(); }, 80); });
+$('#q').addEventListener('keydown', e => {
+  if(e.key==='Escape'){ e.target.value=''; query=''; refilter(); e.target.blur(); }
+  if(e.key==='Enter'){ const first=[...matchSet][0]; if(first){ e.target.blur(); select(first,{reveal:true}); } }
+});
+$('#q-x').onclick = () => { $('#q').value=''; query=''; refilter(); };
+$('#tf').onchange = e => { typeFilter = e.target.value; refilter(); };
+$('#reset').onclick = e => { e.preventDefault(); clearFilter(); refilter(); };
+
+/* ---------- мышь: выбор, панорама, перетаскивание ---------- */
+const stage = $('#stage'), ghost = $('#ghost');
+let ptr = null, lastClick = {id:null, t:0};
+stage.addEventListener('pointerdown', e => {
+  if(e.button!==0) return;
+  if(isTyping()) document.activeElement.blur();
+  const g = e.target.closest('.node');
+  if(g && e.target.closest('.tgl')){ toggle(g.dataset.id); return; }
+  if(g) ptr = {mode:'node', id:g.dataset.id, sx:e.clientX, sy:e.clientY, moved:false, meta:e.metaKey||e.ctrlKey};
+  else { ptr = {mode:'pan', sx:e.clientX, sy:e.clientY, vx:view.x, vy:view.y, moved:false}; stage.classList.add('panning'); }
+});
+window.addEventListener('pointermove', e => {
+  if(!ptr) return;
+  const dx=e.clientX-ptr.sx, dy=e.clientY-ptr.sy;
+  if(!ptr.moved && Math.hypot(dx,dy)>4){
+    ptr.moved = true;
+    if(ptr.mode==='node' && ptr.id!==cur.root.id){ ptr.dragging=true; ghost.textContent = idx.get(ptr.id).n.name; ghost.style.display='block'; stage.classList.add('dragging'); }
+  }
+  if(ptr.mode==='pan' && ptr.moved){ autoFit=false; view.x=ptr.vx+dx; view.y=ptr.vy+dy; applyView(); }
+  if(ptr.dragging){
+    ghost.style.left = e.clientX+14+'px'; ghost.style.top = e.clientY+10+'px';
+    document.querySelectorAll('.node.drop').forEach(x=>x.classList.remove('drop'));
+    const g = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.node');
+    ptr.over = (g && canDrop(ptr.id, g.dataset.id)) ? g.dataset.id : null;
+    if(ptr.over) g.classList.add('drop');
+  }
+});
+window.addEventListener('pointerup', () => {
+  if(!ptr) return;
+  const p = ptr; ptr = null;
+  stage.classList.remove('panning','dragging'); ghost.style.display='none';
+  if(p.mode==='pan' && !p.moved && selectedId){ selectedId=null; render(); fillInsp(); }
+  if(p.mode==='node'){
+    if(p.dragging){ if(p.over) moveNode(p.id, p.over); else render(); return; }
+    if(p.moved) return;
+    if(p.meta) return openUrl(p.id);
+    const now = performance.now();
+    const dbl = lastClick.id===p.id && now-lastClick.t < 380;
+    lastClick = {id:p.id, t:now};
+    select(p.id, {focus:dbl});
+  }
+});
+stage.addEventListener('wheel', e => {
+  e.preventDefault();
+  const m = e.deltaMode===1 ? 16 : 1;
+  if(e.ctrlKey || e.metaKey) zoomAt(Math.exp(-e.deltaY*m*0.01), e.clientX, e.clientY);
+  else { autoFit=false; view.x -= (e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX)*m; view.y -= (e.shiftKey && !e.deltaX ? 0 : e.deltaY)*m; applyView(); }
+}, {passive:false});
+window.addEventListener('resize', () => { autoFit ? fit() : applyView(); });
+
+/* ---------- клавиатура ---------- */
+function navV(dir){
+  const it = itemById.get(selectedId);
+  if(!it) return select(cur.root.id, {reveal:true});
+  let best=null, bd=Infinity;
+  for(const o of lastItems){
+    if(o===it) continue;
+    const dy = (o.y-it.y)*dir; if(dy<=0) continue;
+    const score = dy + (o.d===it.d ? 0 : 1e5 + Math.abs(o.d-it.d)*1e3);
+    if(score<bd){ bd=score; best=o; }
+  }
+  if(best) select(best.n.id, {reveal:true});
+}
+async function copyText(txt){
+  try{ await navigator.clipboard.writeText(txt); return true; }
+  catch(e){ const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); const ok=document.execCommand('copy'); ta.remove(); return ok; }
+}
+document.addEventListener('keydown', e => {
+  const mod = e.metaKey || e.ctrlKey;
+  if(!$('#modal').hidden){
+    if(e.key==='Escape'){ e.preventDefault(); closeModal(); }
+    if(mod && e.key==='Enter'){ e.preventDefault(); applyText(); }
+    return;
+  }
+  if(mod && e.code==='KeyF'){ e.preventDefault(); $('#q').focus(); $('#q').select(); return; }
+  if(mod && e.code==='KeyS'){ e.preventDefault(); exportJSON(); return; }
+  if(isTyping()){ if(e.key==='Escape' && e.target.id!=='q') e.target.blur(); return; }
+  if(mod){
+    if(e.code==='KeyZ'){ e.preventDefault(); e.shiftKey ? redo() : undo(); }
+    else if(e.code==='KeyY'){ e.preventDefault(); redo(); }
+    else if(e.code==='KeyC' || e.code==='KeyX'){
+      const n = selNode(); if(!n) return;
+      e.preventDefault();
+      copyText(toOutline(n)).then(ok => {
+        if(e.code==='KeyX' && n!==cur.root){ deleteSel(); toast('Ветка вырезана — ⌘V вставит её в другой узел'); }
+        else toast(ok ? 'Ветка скопирована как текст' : 'Не удалось скопировать');
+      });
+    }
+    return;
+  }
+  const n = selNode();
+  switch(e.key){
+    case 'Tab': e.preventDefault(); addChild(); break;
+    case 'Enter': e.preventDefault(); n ? addSibling() : select(cur.root.id); break;
+    case 'Backspace': case 'Delete': e.preventDefault(); deleteSel(); break;
+    case ' ': e.preventDefault(); if(n) toggle(n.id); break;
+    case 'F2': e.preventDefault(); if(n) focusName(); break;
+    case 'Escape': if(selectedId){ selectedId=null; render(); fillInsp(); } break;
+    case '/': e.preventDefault(); $('#q').focus(); break;
+    case 'ArrowLeft': e.preventDefault(); if(!n) select(cur.root.id); else if(parentOf(n)) select(parentOf(n).id,{reveal:true}); break;
+    case 'ArrowRight': e.preventDefault();
+      if(!n) select(cur.root.id);
+      else if(n.children.length){ if(n.collapsed){ n.collapsed=false; if(ui.focus) collapseSiblings(n); save(); } const k=kids(n); if(k.length) select(k[0].id,{reveal:true}); }
+      break;
+    case 'h': case 'H': case 'р': case 'Р': togglePanels(); break;
+    case 'g': case 'G': case 'п': case 'П': focusBranch(); break;
+    case 'ArrowUp': e.preventDefault(); e.altKey ? moveSib(-1) : navV(-1); break;
+    case 'ArrowDown': e.preventDefault(); e.altKey ? moveSib(1) : navV(1); break;
+    default: if(e.code==='KeyF' && !e.altKey) fit();
+  }
+});
+document.addEventListener('paste', e => {
+  if(isTyping() || !$('#modal').hidden) return;
+  const txt = e.clipboardData?.getData('text/plain'); if(!txt || !txt.trim()) return;
+  e.preventDefault(); insertOutline(txt);
+});
+
+/* ---------- старт ---------- */
+store = loadStore() || {cases:[], current:null};
+store.cases = store.cases.filter(c=>c && c.root).map(c=>({id:c.id||uid(), root:fix(c.root), updated:c.updated||Date.now()}));
+if(!store.cases.length) store.cases.push({id:uid(), root:sample(), updated:Date.now()});
+if(NATIVE){
+  $('#store-note').innerHTML = 'Данные сохраняются автоматически в файл<br><code style="font-size:10.5px;word-break:break-all">' + esc(BRIDGE.dataPath || 'data.json') + '</code><br>Раз в день рядом делается копия в папку backups.';
+  $('#hint').textContent = 'Tab — новый узел · ⊖/⊕ — закрыть/открыть ветку · H — скрыть панели';
+}
+applyUI();
+openCase(store.cases.some(c=>c.id===store.current) ? store.current : store.cases[0].id);
+</script>
+</body>
+</html>
